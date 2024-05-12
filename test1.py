@@ -32,6 +32,9 @@ eta0 = {
 methods = ['off_unknown','on_wang_guess1',\
             'on_naive','on_naive+']
 
+N_type,f_shape,astype = args['N_type'],args['f_shape'],args['astype']
+name = f"{N_type}_{f_shape}_{astype}"
 rewards=simulate_all_setting(eta0,args,methods)
+rewards.to_csv(f"reward_data/{name}.csv")
 print(rewards)
-visualize_rewards(rewards,'exp1',methods)
+visualize_rewards(rewards,name,methods)
