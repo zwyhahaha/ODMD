@@ -155,11 +155,12 @@ def online_policy(eta,env_dict,method,lamda=None):
     mu = 0
     xt = [0] * env_dict['N_max']
     reward = [0] * env_dict['N_max']
-    mu_record=[]
+    mu_record,gt_record=[],[]
     for t in range(env_dict['N_max']):
         xt[t] = primal_update(env_dict, t, mu)
         rho = lamda[t] if lamda else 0
         gt = dual_update(method, env_dict, t, mu, xt[t], Bt, rho)
+        gt_record.append(gt)
         if xt[t] <= Bt:
             Bt = Bt - xt[t]
         else:
@@ -171,7 +172,7 @@ def online_policy(eta,env_dict,method,lamda=None):
     probs = [Qs[n]-Qs[n+1] for n in range(env_dict['N_max'] - 1)]
     probs.append(Qs[-1])
     reward_mean = sum([probs[i] * reward[i] for i in range(env_dict['N_min'] - 2, len(probs))])
-    return reward_mean,mu_record,xt
+    return reward_mean,mu_record,gt_record
 
 def compute_lambda(B, T_min, T_max):
         

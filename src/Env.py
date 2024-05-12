@@ -51,6 +51,9 @@ class Envr():
                 Q_base= [1]*args['N_min']+\
                     [get_Qexpr(args,t) for t in range(1,args['N_max']-args['N_min']+1)]+[0]
                 Qs=np.array([element for element in Q_base for _ in range(k+1)])
+            elif astype=='trunc_max':
+                N_min, N_max = args['N_min'],args['N_max']+k*ss
+                Qs=np.array([1]*N_min+[get_Qexpr(args,t) for t in range(1,N_max-N_min+1)]+[0])
             rv = rv_qtl2dsct(Qs,N_min,N_max)
             N_mean = Qs.sum()
         else:
