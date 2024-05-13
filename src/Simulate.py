@@ -17,7 +17,8 @@ def simulate_single_setting(eta0,args,methods,runtime = True):
     reward = {method: 0 for method in methods}
     for i in range(args['rounds']):
         env_dict = env.draw_instance()
-        reward['off_unknown'] += offline_policy(env_dict,'unknown')[1]
+        if i==0: # offline only simulate once
+            reward['off_unknown'] += offline_policy(env_dict,'unknown')[1]*args['rounds']
         for method in methods:
             if 'off' in method:
                 continue
