@@ -13,6 +13,9 @@ class Envr():
         self.bmax = 2*self.B / self.N_max
         self.f_shape = args['f_shape']
         self.f_coef = args['f_coef']
+        probs = [self.Qs[n]-self.Qs[n+1] for n in range(self.N_max)]
+        probs.append(self.Qs[-1])
+        self.probs = probs
 
     @staticmethod
     def _set_rv(args):
@@ -86,6 +89,7 @@ class Envr():
         env_dict['bmax'] = self.bmax
         env_dict['f'] = self.draw_reward(self.N_max)
         env_dict['Qs'] = self.Qs
+        env_dict['probs'] = self.probs
         return env_dict
 
 if __name__ == '__main__':

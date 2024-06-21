@@ -16,7 +16,7 @@ args = {
         'astype':'multiplicative',
         'as_scale':1,
         'as_stepsize':5,
-        'max_scale':30,
+        'max_scale':5,
         'rounds':3,
         'Q_beta':0.99,
         'Q_alpha':0.75,
@@ -29,12 +29,13 @@ args = {
 eta0 = {
     'off_unknown':1,'on_he_guess0':1,'on_he_guess1':1,\
     'on_wang_guess0':1,'on_wang_guess1':1,'on_balseiro':1,\
-    'on_naive':1.5,'on_naive+':1,'on_naive_new':1.2
+    'on_naive':1.5,'on_naive+':1,'on_naive_new':1.2,
+    'on_LP_naive':0, 'on_LP_naive+':0
 }
 # methods = ['off_unknown','on_wang_guess1',\
 #             'on_naive','on_naive+']
-methods = ['off_unknown','on_naive',\
-            'on_naive+','on_wang_guess1']
+methods = ['off_unknown',\
+            'on_naive+','on_LP_naive','on_LP_naive+']
 
 # methods = ['off_unknown','on_naive','on_naive+','on_naive_new']
 

@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from src.Env import Envr
-from src.Policy import offline_policy, online_policy, compute_lambda
+from src.Policy import offline_policy, online_policy, compute_lambda, LP_based_method
 
 def simulate_single_setting(eta0,args,methods,runtime = True):
     env = Envr(args)
@@ -24,8 +24,12 @@ def simulate_single_setting(eta0,args,methods,runtime = True):
         for method in methods:
             if 'off' in method:
                 continue
-            reward[method] += online_policy(eta[method],env_dict,method,lamda)[0]
-            stop[method] += online_policy(eta[method],env_dict,method,lamda)[1]
+            if 'LP' in method:
+                reward[method] += LP_based_method(env_dict,method)[0]
+                stop[method] += LP_based_method(env_dict,method)[1]
+            else:
+                reward[method] += online_policy(eta[method],env_dict,method,lamda)[0]
+                stop[method] += online_policy(eta[method],env_dict,method,lamda)[1]
     reward = {method: value/args['rounds'] for method,value in reward.items()}
     stop = {method: value/args['rounds'] for method,value in stop.items()}
     N = env.N_max if 'max' in args['B_type'] else env.N_mean 
@@ -73,7 +77,9 @@ def visualize_rewards(rewards,name,methods):
         'on_balseiro':'VT_DMD',
         'on_naive':'naive',
         'on_naive+':'naive+',
-        'on_naive_new':'naive_new'
+        'on_naive_new':'naive_new',
+        'on_LP_naive': 'LP_naive',
+        'on_LP_naive+': 'LP_naive+'
     }
     styles = ['o-', 's--', '^:', '*-', 'd--', 'o:', 's-']
     
@@ -105,7 +111,9 @@ def visualize_stops(stops,name,methods):
         'on_balseiro':'VT_DMD',
         'on_naive':'naive',
         'on_naive+':'naive+',
-        'on_naive_new':'naive_new'
+        'on_naive_new':'naive_new',
+        'on_LP_naive': 'LP_naive',
+        'on_LP_naive+': 'LP_naive+'
     }
     styles = ['o-', 's--', '^:', '*-', 'd--', 'o:', 's-']
     

@@ -5,7 +5,7 @@ from coptpy import COPT
 from scipy.optimize import minimize
 from pulp import *
 from src.copt_pulp import *
-from src.utils import get_reward,get_resource,evaluate_solution
+from src.utils import get_reward,get_resource,evaluate_solution,expected_consumption
 
 def offline_policy_sqrt(env_dict,T_type='unknown', runtime = False):
     env = cp.Envr()
@@ -226,12 +226,57 @@ def online_policy(eta,env_dict,method,lamda=None):
         mu = max(0,mu - eta*gt)
         mu_record.append(mu)
         reward[t],_ = evaluate_solution(xt, env_dict, t)
-    Qs = env_dict['Qs']
-    probs = [Qs[n]-Qs[n+1] for n in range(env_dict['N_max'])]
-    probs.append(Qs[-1])
+    probs = env_dict['probs']
     reward_mean = sum([probs[i] * reward[i] for i in range(env_dict['N_max'])])
     stop_mean = sum([min(stop,i) * probs[i] for i in range(env_dict['N_max'])])
     return reward_mean,stop_mean,mu_record,gt_record
+
+def dual_subproblem(t,Bt,env_dict,method):
+    env = cp.Envr()
+    model = env.createModel("dual subproblem")
+    model.setParam('Logging', False)
+    d = expected_consumption(t-1,Bt,env_dict,method)
+    d = np.array([d])
+    p = model.addMVar(1,lb=0,vtype=COPT.CONTINUOUS,nameprefix="p")
+    y = model.addMVar(t,lb=0,vtype=COPT.CONTINUOUS, nameprefix="y")
+    fun = env_dict['f']
+    f = np.array([fun[j]['params']['f1'] for j in range(t)])
+    e = np.ones(t)
+    model.setObjective(d@p + (1/t)*e@y,sense = COPT.MINIMIZE)
+    model.addConstr(np.ones((t,1))@p + y >= f)
+    model.solve()
+    if model.status == COPT.OPTIMAL:
+        solution=p.X[0]
+        fun = model.objval
+    else:
+        print("Optimization was stopped with status:", model.status)
+        solution=None
+        fun=None
+    return solution, fun
+
+def LP_based_method(env_dict,method):
+    Bt,bmax = env_dict['B'],env_dict['bmax']
+    first_stop = 1
+    stop = env_dict['N_max']
+    xt = [0] * env_dict['N_max']
+    reward = [0] * env_dict['N_max']
+    p = 0
+    for t in range(env_dict['N_max']):
+        f = env_dict['f'][t]['params']['f1']
+        xt[t] = bmax if f>p else 0 
+        if xt[t] <= Bt:
+            Bt = Bt - xt[t]
+        else:
+            xt[t] = 0
+            if first_stop:
+                first_stop = 0
+                stop = env_dict['N_mean'] - t
+        p,fun = dual_subproblem(t+1,Bt,env_dict,method)
+        reward[t],_ = evaluate_solution(xt, env_dict, t)
+    probs = env_dict['probs']
+    reward_mean = sum([probs[i] * reward[i] for i in range(env_dict['N_max'])])
+    stop_mean = sum([min(stop,i) * probs[i] for i in range(env_dict['N_max'])])
+    return reward_mean,stop_mean
 
 def compute_lambda(B, T_min, T_max):
         

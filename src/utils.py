@@ -55,3 +55,16 @@ def evaluate_solution(sol, env_dict, T = None):
     resources = np.array([get_resource(sol[t]) for t in range(T)])
     return np.sum(rewards), env_dict['B']-np.sum(resources)
 
+def conditional_mean(t,env_dict):
+    Qs,N_max = env_dict['Qs'], env_dict['N_max']
+    Qst = [Qs[s]/Qs[t] for s in range(N_max)]
+    return sum(Qst[t:N_max])
+
+def expected_consumption(t,Bt,env_dict,method):
+    if "LP_naive+" in method:
+        d = env_dict['B'] / env_dict['N_mean']
+    elif "LP_naive" in method:
+        d = Bt / conditional_mean(t,env_dict)
+    else:
+        raise KeyError
+    return d
