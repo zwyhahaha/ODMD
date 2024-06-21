@@ -12,10 +12,11 @@ args = {
                     # NOTE: when Q_power, set large N_max(70)!
         'N_mean':5,
         'N_std':1,
+        'B_type':'mean',
         'astype':'multiplicative',
         'as_scale':1,
         'as_stepsize':5,
-        'max_scale':2,
+        'max_scale':20,
         'rounds':1,
         'Q_beta':0.99,
         'Q_alpha':0.75,
@@ -31,7 +32,8 @@ eta0 = {
 }
 methods = ['off_unknown','on_wang_guess1',\
             'on_naive','on_naive+']
-
+methods = ['off_unknown',\
+            'on_naive','on_naive+']
 N_type,f_shape,astype = args['N_type'],args['f_shape'],args['astype']
 name = f"{N_type}_{f_shape}_{astype}"
 rewards=simulate_all_setting(eta0,args,methods)

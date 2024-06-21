@@ -37,6 +37,44 @@ def offline_policy_sqrt(env_dict,T_type='unknown', runtime = False):
         print('optimization time for N={T}:', datetime.now()-start_time)
     return solution, fun
 
+def offline_policy_linear(env_dict,T_type='unknown', runtime = False):
+    env = cp.Envr()
+    model = env.createModel("offline_policy")
+    model.setParam('Logging', False)
+
+    B,bmax,fun = env_dict['B'],env_dict['bmax'],env_dict['f']
+    T = env_dict['N'] if T_type == 'known' else env_dict['N_max']
+    x = model.addMVar(T, lb=0, ub=bmax,vtype=COPT.CONTINUOUS, nameprefix="x")
+    f = np.array([fun[t]['params']['f1'] for t in range(T)])
+    if T_type == 'known':
+        def loss(x):
+            return f@x
+    elif T_type == 'unknown':
+        def loss(x):
+            return f@np.diag(env_dict['Qs'][:T])@x
+    start_time = datetime.now()
+    model.addConstr(x@np.ones(T)<=B)
+    model.setObjective(loss(x), sense=COPT.MAXIMIZE)
+    model.solve()
+    if model.status == COPT.OPTIMAL:
+        solution=[(x[t].X) for t in range(T)]
+        fun = model.objval
+    else:
+        print("Optimization was stopped with status:", model.status)
+        solution=None
+        fun=None
+    if runtime:
+        print('optimization time for N={T}:', datetime.now()-start_time)
+    return solution, fun
+
+def offline_policy_sqrt_manual(env_dict,T_type='unknown', runtime = False):
+    coeffs = [env_dict['Qs'][i] * env_dict['f'][i]['params']['f1'] for i in range(env_dict['N_max'])]
+    B = env_dict['B']
+    deno = np.dot(coeffs, coeffs)
+    solution = [coeffs[i]**2*B / deno for i in range(len(coeffs))]
+    fun = np.dot(coeffs, np.sqrt(solution))
+    return solution, fun
+
 def offline_policy_ufunc(env_dict,T_type='unknown', runtime = False):
     B,bmax = env_dict['B'],env_dict['bmax']
     T = env_dict['N'] if T_type == 'known' else env_dict['N_max']
@@ -67,7 +105,10 @@ def offline_policy_ufunc(env_dict,T_type='unknown', runtime = False):
 
 def offline_policy(env_dict,T_type='unknown', runtime = False):
     if env_dict['f'][0]['type']=='sqrt':
-        return offline_policy_sqrt(env_dict,T_type,runtime)
+        # return offline_policy_sqrt(env_dict,T_type,runtime)
+        return offline_policy_sqrt_manual(env_dict,T_type,runtime)
+    elif env_dict['f'][0]['type']=='linear':
+        return offline_policy_linear(env_dict,T_type,runtime)
     else:
         return offline_policy_ufunc(env_dict,T_type,runtime)
     
@@ -79,7 +120,7 @@ def make_decision(ft, coef, mu, bmax):
         return bmax 
     else:
         if ft['type'] == 'linear':
-            xt = bmax
+            xt = bmax if coef*ft['params']['f1']-mu > 0 else 0
         elif ft['type'] == 'sqrt':
             opt = (coef * ft['params']['f1']) / (2 * mu)
             xt = np.clip(opt, 0, np.sqrt(bmax))
@@ -95,9 +136,14 @@ def make_decision(ft, coef, mu, bmax):
             raise NotImplementedError
         return xt
     
-def primal_update(env_dict, t, mu):
+def primal_update(method, env_dict, t, mu):
     ft, bmax = env_dict['f'][t], env_dict['bmax']
     xt = make_decision(ft,1,mu,bmax)
+    # if 'naive_new' in method:
+    #     Qs = env_dict['Qs']
+    #     xt = make_decision(ft,1,mu/Qs[t],bmax)
+    # else:
+    #     xt = make_decision(ft,1,mu,bmax)
     return xt
     
 def dual_subgrad(bxt, rho):
@@ -143,8 +189,15 @@ def dual_update(method, env_dict, t, mu, bxt, Bt, lamda):
     else:
         if 'balseiro' in method:
             rho = lamda
+        elif 'naive_new' in method:
+            # rho = env_dict['B'] / env_dict['N_max']
+            Qs = env_dict['Qs']
+            rho = env_dict['B'] * Qs[t] / env_dict['N_mean']
         elif 'naive+' in method:
-            rho= guess_dual_subgrad(mu, Bt, t, env_dict, 3)
+            # rho= guess_dual_subgrad(mu, Bt, t, env_dict, 3)
+            Qs = env_dict['Qs']
+            Qst = [Qs[s]/Qs[t] for s in range(env_dict['N_max'])]
+            rho = (Bt)/sum(Qst[t:env_dict['N_max']])
         elif 'naive' in method:
             rho = env_dict['B'] / env_dict['N_mean']
         gt = dual_subgrad(bxt, rho)
@@ -156,8 +209,10 @@ def online_policy(eta,env_dict,method,lamda=None):
     xt = [0] * env_dict['N_max']
     reward = [0] * env_dict['N_max']
     mu_record,gt_record=[],[]
+    first_stop = 1
+    stop = env_dict['N_max']
     for t in range(env_dict['N_max']):
-        xt[t] = primal_update(env_dict, t, mu)
+        xt[t] = primal_update(method, env_dict, t, mu)
         rho = lamda[t] if lamda else 0
         gt = dual_update(method, env_dict, t, mu, xt[t], Bt, rho)
         gt_record.append(gt)
@@ -165,14 +220,18 @@ def online_policy(eta,env_dict,method,lamda=None):
             Bt = Bt - xt[t]
         else:
             xt[t] = 0
+            if first_stop:
+                first_stop = 0
+                stop = env_dict['N_mean'] - t
         mu = max(0,mu - eta*gt)
         mu_record.append(mu)
         reward[t],_ = evaluate_solution(xt, env_dict, t)
     Qs = env_dict['Qs']
-    probs = [Qs[n]-Qs[n+1] for n in range(env_dict['N_max'] - 1)]
+    probs = [Qs[n]-Qs[n+1] for n in range(env_dict['N_max'])]
     probs.append(Qs[-1])
-    reward_mean = sum([probs[i] * reward[i] for i in range(env_dict['N_min'] - 2, len(probs))])
-    return reward_mean,mu_record,gt_record
+    reward_mean = sum([probs[i] * reward[i] for i in range(env_dict['N_max'])])
+    stop_mean = sum([min(stop,i) * probs[i] for i in range(env_dict['N_max'])])
+    return reward_mean,stop_mean,mu_record,gt_record
 
 def compute_lambda(B, T_min, T_max):
         
